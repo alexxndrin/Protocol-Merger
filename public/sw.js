@@ -11,7 +11,6 @@ const urls = [
     '/js/app.js',
     '/js/dashboard.js',
     '/js/shift1.js',
-    '/data/gameState.json',
     '/images/character.jpg',
     '/images/oracul.png',
     '/images/icon.svg',
