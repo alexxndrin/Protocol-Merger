@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/images/icon.svg">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Протокол: Слияние</title>
+
+	<link rel="stylesheet" href="css/main.css">
+	<script src="js/app.js" defer></script>
+
+</head>
+<body>
+
+	<div class="container">
+		<section class="gallery">
+
+			<div class="frame">
+				<div class="frame__content">
+					<h2>Протокол: Слияние</h2>
+				</div>
+			</div>
+
+			<div class="frame">
+				<div class="frame__content">
+					<div class="frame-media frame-media_left" style="background-image: url(images/index2.jpg)"></div>
+				</div>
+			</div>
+
+			<div class="frame frame_bg">
+				<div class="frame__content">
+					<div class="frame-media frame-media_right" style="background-image: url(images/index3.jpg)"></div>
+				</div>
+			</div>
+
+			<div class="frame"></div>
+
+			<div class="frame">
+				<div class="frame__content text-right">
+					<h3>аномалия после крушения</h3>
+					<p>Космический корабль «Ковчег-07» терпит катастрофу у неизвестной планеты. В живых остается только капитан Элис Вега. Она приходит в себя через 72 часа и обнаруживает, что центральный ИИ «Оракул» ведет себя непредсказуемо: то помогает, то блокирует системы жизнеобеспечения.</p>
+				</div>
+			</div>
+
+			<div class="frame frame_bg">
+				<div class="frame__content">
+					<div class="frame-media frame-media_left" style="background-image: url(images/index4.jpg)"></div>
+				</div>
+			</div>
+
+			<div class="frame"></div>
+
+			<div class="frame"></div>
+
+			<div class="frame">
+				<div class="frame__content text-left">
+					<h3>СБОЙ ВМЕСТО ПАМЯТИ</h3>
+					<p>Система сообщает об ошибке: прогресс не сохранится. Элис теряет свои записи, логи и улики. Теперь каждое ее решение — расследование через искаженные метаданные. Выбор влияет на доверие ИИ и ведет к раскрытию того, кто превратил корабль в коллектор человеческих сознаний.</p>
+				</div>
+			</div>
+
+			<div class="frame frame_bg">
+				<div class="frame__content">
+					<div class="frame-media frame-media_right" style="background-image: url(images/index1.jpg)"></div>
+				</div>
+			</div>
+
+
+			<div class="frame"></div>
+			<div class="frame"></div>
+
+
+			<div class="frame"></div>
+			<div class="frame"></div>
+		
+			<div class="frame">
+				<div class="frame__content">
+					<button class="btn-game-start">Start</button>
+				</div>
+			</div>
+
+
+		</section>
+	</div>
+
+	<img class="soundbutton paused" src="images/sound.gif" alt="Alt">
+	<audio class="audio" src="media/background.mp3" loop></audio>
+
+	<script>
+		if ('serviceWorker' in navigator) {
+			window.addEventListener('load', function() {
+				navigator.serviceWorker.register('/sw.js')
+					.then(function(registration) {
+						console.log('Service Worker зарегистрирован');
+					})
+					.catch(function(error) {
+						console.log('Ошибка регистрации:', error);
+					});
+			});
+		}
+	</script>
+
+</body>
+</html>

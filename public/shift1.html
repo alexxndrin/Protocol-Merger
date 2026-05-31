@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Протокол: Слияние</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="/images/icon.svg">
+    <link rel="stylesheet" href="/css/shift1.css">
+</head>
+<body>
+<div class="fullscreen-game">
+    <div class="scene-bg" id="globalBg"></div>
+
+    <div class="game-content">
+        <div class="top-left-menu">
+            <button class="menu-btn" id="journalBtn">ЖУРНАЛ ОШИБОК</button>
+            <button class="menu-btn" id="adminBtn">ПАНЕЛЬ АДМИНА</button>
+            <button class="menu-btn" id="archiveBtn">АРХИВ ДАННЫХ</button>
+        </div>
+
+        <div class="shift-indicator" id="shiftIndicator">ПРОЛОГ</div>
+
+        <div class="top-bar">
+            <div class="health-header">
+                <span>ДОВЕРИЕ</span>
+                <span id="healthPercent">100%</span>
+            </div>
+            <div class="health-bar-bg">
+                <div class="health-fill" id="healthFill"></div>
+            </div>
+            <div class="health-stats">
+                <span id="currentHp">100</span> / <span id="maxHp">100</span> HP
+            </div>
+        </div>
+
+        <div class="system-message-container hidden" id="systemContainer">
+            <div class="system-bubble">
+                <div class="system-name" id="systemName">СИСТЕМА</div>
+                <div class="system-text" id="systemText"></div>
+            </div>
+        </div>
+
+        <div class="characters-container">
+            <div class="main-character" id="mainCharArea">
+                <img id="mainCharImg" src="/images/character.jpg" alt="Элис">
+            </div>
+            <div class="secondary-character" id="secondaryCharArea">
+                <img id="secondaryCharImg" src="/images/oracul.png" alt="Оракул">
+            </div>
+        </div>
+
+        <div class="dialog-left" id="dialogLeft">
+            <div class="speaker-name" id="leftSpeakerName">ЭЛИС</div>
+            <div class="phrase-text" id="leftPhraseText"></div>
+        </div>
+
+        <div class="dialog-right hidden" id="dialogRight">
+            <div class="speaker-name" id="rightSpeakerName">ОРАКУЛ</div>
+            <div class="phrase-text" id="rightPhraseText"></div>
+        </div>
+
+        <div class="choice-buttons hidden" id="choiceButtons">
+            <button class="choice-btn" id="choiceA"></button>
+            <button class="choice-btn" id="choiceB"></button>
+        </div>
+
+        <div class="next-button-wrapper" id="nextButtonWrapper">
+            <button class="next-btn" id="nextButton">ДАЛЕЕ</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальные окна -->
+<div id="journalModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close-modal" data-modal="journalModal">&times;</span>
+        <h2>ЖУРНАЛ ОШИБОК</h2>
+        <div class="modal-body" id="journalLogs">
+            <p>Системные сообщения и ошибки будут отображаться здесь.</p>
+        </div>
+    </div>
+</div>
+
+<div id="archiveModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close-modal" data-modal="archiveModal">&times;</span>
+        <h2>АРХИВ ДАННЫХ</h2>
+        <div class="modal-body" id="archiveClues">
+            <p>Собранные улики появятся здесь.</p>
+        </div>
+    </div>
+</div>
+
+<div id="adminModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close-modal" data-modal="adminModal">&times;</span>
+        <h2>ПАНЕЛЬ АДМИНИСТРАТОРА</h2>
+        <div class="modal-body">
+            <div id="adminInfo">
+                <p><strong>Текущая смена:</strong> <span id="adminShiftName">—</span></p>
+                <p><strong>Доверие системы:</strong> <span id="adminHealth">0</span>%</p>
+                <p><strong>Улик найдено:</strong> <span id="adminCluesCount">0</span></p>
+            </div>
+            <div class="admin-buttons">
+                <button id="adminNewGameBtn">Новая игра</button>
+                <button id="adminResetShiftBtn">Сбросить текущую смену</button>
+                <button id="adminContinueBtn">Продолжить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<audio id="game-bg-audio" src="/media/background2.mp3" loop></audio>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const audio = document.getElementById('game-bg-audio');
+        if (!audio) return;
+
+        audio.volume = 0.1;
+
+        const playMusic = () => {
+            audio.play()
+                .then(() => {
+                    // Как только музыка успешно включилась, убираем слежку за кликами
+                    document.removeEventListener('click', playMusic);
+                })
+                .catch(err => console.log("Браузер всё ещё ждет клика пользователя..."));
+        };
+
+        // Включаем музыку при любом первом клике по экрану
+        document.addEventListener('click', playMusic);
+    });
+</script>
+
+<script src="js/shift1.js"></script>
+
+	<script>
+		if ('serviceWorker' in navigator) {
+			window.addEventListener('load', function() {
+				navigator.serviceWorker.register('/sw.js')
+					.then(function(registration) {
+						console.log('Service Worker зарегистрирован');
+					})
+					.catch(function(error) {
+						console.log('Ошибка регистрации:', error);
+					});
+			});
+		}
+	</script>
+
+</body>
+</html>

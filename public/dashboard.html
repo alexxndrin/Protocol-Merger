@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/images/icon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Протокол: Слияние</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+    <script src="js/dashboard.js" defer></script>
+</head>
+<body>
+
+    <div class="moving-bg"></div>
+
+    <div class="scanlines"></div>
+
+    <div class="terminal-container">
+        <header class="terminal-header">
+            <h1 class="glitch-title">Инициализация терминала</h1>
+            <p class="subtitle">Идентификация: Бортинженер / Системный Администратор</p>
+        </header>
+
+        <main class="terminal-body">
+            <div class="status-block">
+                <div class="status-item">
+                    <span>Связь с сервером жизнеобеспечения:</span>
+                    <span class="status-value status-error">СБОЙ [ERROR_500]</span>
+                </div>
+                <div class="status-item">
+                    <span>Локальное хранилище данных:</span>
+                    <span class="status-value status-warning">ДЕГРАДАЦИЯ СЕКТОРОВ</span>
+                </div>
+                <div class="status-item">
+                    <span>Текущая задача:</span>
+                    <span class="status-value">СМЕНА #1: ПОИСК УЛИК И ЛОГОВ</span>
+                </div>
+            </div>
+
+            <div class="console-logs">
+                <p class="log-line">>> Накатывание бэкапов конфигурации...</p>
+                <p class="log-line">>> Проверка целостности файлов localStorage... Ошибка сессии.</p>
+                <p class="log-line">>> ВНИМАНИЕ: Зафиксированы фантомные сигналы на внешней обшивке.</p>
+                <p class="log-line">>> Нажмите "ПОДКЛЮЧИТЬСЯ К СЕТИ" для перехода в консоль управления.</p>
+            </div>
+        </main>
+
+        <footer class="terminal-footer">
+            <button class="btn-connect">Подключиться к сети</button>
+        </footer>
+    </div> 
+
+    <audio id="bg-audio" src="media/background.mp3" loop></audio>
+
+    <div id="loader-screen" class="loader-overlay" style="display: none;">
+        <div class="loader-content">
+            <div class="terminal-spinner"></div>
+            <p class="loader-text">УСТАНОВКА СОЕДИНЕНИЯ...</p>
+            <p id="loader-progress" class="loader-progress">0%</p>
+        </div>
+    </div>
+
+	<script>
+		if ('serviceWorker' in navigator) {
+			window.addEventListener('load', function() {
+				navigator.serviceWorker.register('/sw.js')
+					.then(function(registration) {
+						console.log('Service Worker зарегистрирован');
+					})
+					.catch(function(error) {
+						console.log('Ошибка регистрации:', error);
+					});
+			});
+		}
+	</script>
+
+</body>
+</html>

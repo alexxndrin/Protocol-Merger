@@ -1,0 +1,246 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Подключение шрифтов */
+@font-face {
+    font-family: 'raleway_c';
+    src: url('../fonts/a-citynovalt.woff2') format('woff2');
+    font-weight: 300;
+}
+@font-face {
+    font-family: 'raleway_c_titles';
+    src: url('../fonts/dreamscar.woff2') format('woff2');
+    font-weight: 100;
+}
+
+body {
+    background-color: #050508;
+    color: #ffffff;
+    font-family: 'raleway_c', sans-serif;
+    font-weight: 300;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0; /* Для плавного появления при переходе */
+    transition: opacity 0.8s ease;
+}
+
+/* Панорамное движение фонового изображения влево-вправо */
+.moving-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 120%; 
+    height: 100%;
+    background: url('../images/main.jpg') center/cover no-repeat;
+    z-index: 1;
+    opacity: 0.7; 
+    animation: panBackground 20s ease-in-out infinite alternate;
+}
+
+@keyframes panBackground {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-15%);
+    }
+}
+
+/* Эффект старого монитора поверх экрана */
+.scanlines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background-size: 100% 4px, 6px 100%;
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* Контейнер интерфейса */
+.terminal-container {
+    position: relative;
+    z-index: 3;
+    width: 90%;
+    max-width: 800px;
+    background: rgba(5, 7, 12, 0.85);
+    border: 1px solid rgba(163, 255, 110, 0.2);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 15px rgba(163, 255, 110, 0.05);
+    padding: 40px;
+    border-radius: 4px;
+}
+
+.terminal-header h1 {
+    font-family: 'raleway_c_titles', sans-serif;
+    font-weight: 100;
+    font-size: 2.5rem;
+    color: #ffffff ;
+    text-shadow: 0 0 5px rgba(255, 208, 0, 0.5);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    font-size: 0.9rem;
+    color: #888;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+}
+
+/* Блок статуса */
+.status-block {
+    margin-bottom: 25px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.status-value {
+    color: #3ba000;
+    font-weight: bold;
+}
+
+.status-error {
+    color: #ff3333;
+}
+
+.status-warning {
+    color: #ffb000 ;
+}
+
+/* Окно вывода логов */
+.console-logs {
+    background: rgba(0, 0, 0, 0.538);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #39ff14 ;
+    height: 120px;
+    overflow-y: hidden;
+    margin-bottom: 30px;
+}
+
+.log-line {
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    border-right: 2px solid transparent;
+}
+
+/* Кнопка Подключиться к сети */
+.btn-connect {
+    position: relative; 
+    width: 100%;
+    font-family: 'raleway_c_titles', sans-serif;
+    font-weight: 600; 
+    font-size: 1.2rem;
+    color: #ffffff ; 
+    background: transparent; 
+    border: none;
+    padding: 15px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px; 
+    transition: all 0.3s ease;
+    /* Фиксируем скос углов самой кнопки, чтобы форма не прыгала */
+    clip-path: polygon(25px 0%, 100% 0%, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0% 100%, 0% 25px);
+}
+
+/* Рамка*/
+.btn-connect::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+    clip-path: polygon(25px 0%, 100% 0%, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0% 100%, 0% 25px);
+    transition: all 0.3s ease;
+    pointer-events: none; 
+}
+
+.btn-connect:hover {
+    color: #000 !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.8);
+}
+
+.btn-connect:hover::before {
+    box-shadow: inset 0 0 0 3px #000;
+}
+
+.btn-connect:active {
+    filter: brightness(0.8);
+}
+
+/* Полноэкранный оверлей загрузки */
+.loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: monospace;
+}
+
+/* Контент загрузки */
+.loader-content {
+    text-align: center;
+    color: #ffffff; 
+    text-shadow: 0 0 5px rgba(255, 208, 0, 0.5);
+}
+
+/* Крутящийся спиннер */
+.terminal-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255, 255, 255, 0.2); 
+    border-top: 3px solid #ffffff;
+    border-radius: 50%;
+    margin: 0 auto 20px;
+    animation: spin 1s linear infinite;
+}
+
+/* Текст УСТАНОВКА СОЕДИНЕНИЯ... */
+.loader-text {
+    font-family: 'raleway_c_titles', monospace; 
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+}
+
+/* Проценты загрузки */
+.loader-progress {
+    font-family: 'raleway_c', monospace; 
+    font-size: 1.5rem;
+    /* font-weight: bold; */
+    color: #ffffff; 
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
