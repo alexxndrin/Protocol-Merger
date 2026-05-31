@@ -1,12 +1,60 @@
-let currentShiftIndex = 0;      // 0 = пролог, затем 0..4 смены, 5 = таймлайн, 6 = финал
+let currentShiftIndex = 0;      
 let currentHealth = 0;
 const maxHealth = 100;
 let collectedClues = [];
 let finalChoice = null;
 let shiftStartHealth = 0;
 
-// Журнал ошибок (системные сообщения)
+// Журнал ошибок
 let systemLogs = [];
+
+// ----------------------------- МАШИНА СОСТОЯНИЙ (НОВОЕ ЖЕСТКОЕ СОХРАНЕНИЕ) -----------------------------
+let currentDialogsQueue = [];
+let currentDialogIndex = 0;
+let onQueueEmpty = ''; 
+let isWaitingForChoice = false;
+let isWaitingForFinalChoice = false;
+let isWaitingForTimeline = false;
+let isGameFinished = false;
+
+function saveToLocalStorage() {
+    const state = {
+        currentShiftIndex, currentHealth, collectedClues, systemLogs, shiftStartHealth, finalChoice,
+        currentDialogsQueue, currentDialogIndex, onQueueEmpty,
+        isWaitingForChoice, isWaitingForFinalChoice, isWaitingForTimeline, isGameFinished
+    };
+    localStorage.setItem('kovcheg_save', JSON.stringify(state));
+}
+
+function loadFromLocalStorage() {
+    const saved = localStorage.getItem('kovcheg_save');
+    if (saved) {
+        try {
+            const s = JSON.parse(saved);
+            currentShiftIndex = s.currentShiftIndex || 0;
+            currentHealth = s.currentHealth || 0;
+            collectedClues = s.collectedClues || [];
+            systemLogs = s.systemLogs || [];
+            shiftStartHealth = s.shiftStartHealth || 0;
+            finalChoice = s.finalChoice || null;
+
+            currentDialogsQueue = s.currentDialogsQueue || [];
+            currentDialogIndex = s.currentDialogIndex || 0;
+            onQueueEmpty = s.onQueueEmpty || '';
+            isWaitingForChoice = s.isWaitingForChoice || false;
+            isWaitingForFinalChoice = s.isWaitingForFinalChoice || false;
+            isWaitingForTimeline = s.isWaitingForTimeline || false;
+            isGameFinished = s.isGameFinished || false;
+            return true;
+        } catch(e) { return false; }
+    }
+    return false;
+}
+
+function clearLocalStorage() {
+    localStorage.removeItem('kovcheg_save');
+}
+// ------------------------------------------------------------------------------------------------------
 
 // Данные смен (1–5)
 const shifts = [
@@ -255,7 +303,7 @@ const lowTrustEnding = [
     { type: "right", name: "ОРАКУЛ", text: "Капитан. Сессия завершена. Сознание интегрировано. Я выполнил ваш приказ. Я отпустил вас. И теперь я... один." }
 ];
 
-//  DOM элементы 
+// DOM элементы 
 const dom = {
     globalBg: document.getElementById('globalBg'),
     shiftIndicator: document.getElementById('shiftIndicator'),
@@ -279,7 +327,7 @@ const dom = {
     nextWrapper: document.getElementById('nextButtonWrapper')
 };
 
-//  Вспомогательные функции 
+// Вспомогательные функции 
 function setBackground(imageFile) {
     const bg = dom.globalBg;
     if (bg.fadeTimer) clearTimeout(bg.fadeTimer);
@@ -310,6 +358,7 @@ function modifyHealth(delta, showPopup = true) {
     if (showPopup && actualDelta !== 0) {
         showResultMessage(`Доверие ${actualDelta > 0 ? `+${actualDelta}` : `${actualDelta}`}%`);
     }
+    saveToLocalStorage();
     return currentHealth;
 }
 
@@ -347,7 +396,6 @@ function showSystemMessage(name, text) {
     dom.dialogRight.classList.add('hidden');
     dom.choiceButtons.classList.add('hidden');
     dom.nextWrapper.classList.remove('hidden');
-    addSystemLog(`[${name}] ${text}`);
 }
 
 function hideSystemMessage() {
@@ -379,13 +427,7 @@ function showChoice(choiceAtext, choiceBtext, onChoice) {
     dom.dialogRight.classList.add('hidden');
     setCharactersVisibility(true, true);
     
-    document.getElementById('choiceA').textContent = `А: ${choiceAtext}`;
-    document.getElementById('choiceB').textContent = `Б: ${choiceBtext}`;
-    
-    dom.choiceButtons.classList.remove('hidden');
-    dom.choiceButtons.style.display = 'flex';
-    dom.nextWrapper.classList.add('hidden');
-    
+    // Клонируем ноды чтобы убрать старые слушатели кликов
     const choiceA = document.getElementById('choiceA');
     const choiceB = document.getElementById('choiceB');
     const newChoiceA = choiceA.cloneNode(true);
@@ -396,120 +438,169 @@ function showChoice(choiceAtext, choiceBtext, onChoice) {
     const finalA = document.getElementById('choiceA');
     const finalB = document.getElementById('choiceB');
     
+    finalA.textContent = `А: ${choiceAtext}`;
+    finalB.textContent = `Б: ${choiceBtext}`;
+    
+    dom.choiceButtons.classList.remove('hidden');
+    dom.choiceButtons.style.display = 'flex';
+    dom.nextWrapper.classList.add('hidden');
+    
     let made = false;
-    const handlerA = () => {
-        if (made) return;
-        made = true;
+    finalA.addEventListener('click', () => {
+        if (made) return; made = true;
         dom.choiceButtons.classList.add('hidden');
         dom.choiceButtons.style.display = 'none';
-        finalA.removeEventListener('click', handlerA);
-        finalB.removeEventListener('click', handlerB);
         onChoice('A');
-    };
-    const handlerB = () => {
-        if (made) return;
-        made = true;
+    });
+    finalB.addEventListener('click', () => {
+        if (made) return; made = true;
         dom.choiceButtons.classList.add('hidden');
         dom.choiceButtons.style.display = 'none';
-        finalA.removeEventListener('click', handlerA);
-        finalB.removeEventListener('click', handlerB);
         onChoice('B');
-    };
-    finalA.addEventListener('click', handlerA);
-    finalB.addEventListener('click', handlerB);
+    });
 }
 
-//  Логика прохождения 
-let currentDialogsQueue = [];
-let afterChoiceCallback = null;
-let afterFinalCallback = null;
-
-function nextStep() {
+// --------------------------- ЯДРО ПРОХОЖДЕНИЯ (УПРАВЛЕНИЕ ОЧЕРЕДЬЮ) ---------------------------
+function showCurrentDialog() {
     dom.choiceButtons.classList.add('hidden');
-    if (currentDialogsQueue.length === 0) {
-        if (afterChoiceCallback) {
-            const cb = afterChoiceCallback;
-            afterChoiceCallback = null;
-            cb();
-        } else if (afterFinalCallback) {
-            const cb = afterFinalCallback;
-            afterFinalCallback = null;
-            cb();
+    
+    if (currentDialogIndex < currentDialogsQueue.length) {
+        const step = currentDialogsQueue[currentDialogIndex];
+        if (step.type === 'system') {
+            showSystemMessage(step.name, step.text);
+            if(currentDialogIndex === 0) addSystemLog(`[${step.name}] ${step.text}`);
+        } else {
+            showDialog(step.type, step.name, step.text);
         }
-        return;
-    }
-    const step = currentDialogsQueue.shift();
-    if (step.type === 'system') {
-        showSystemMessage(step.name, step.text);
+        
         dom.nextButton.onclick = () => {
-            hideSystemMessage();
-            nextStep();
+            currentDialogIndex++;
+            saveToLocalStorage();
+            showCurrentDialog();
         };
     } else {
-        showDialog(step.type, step.name, step.text);
-        dom.nextButton.onclick = () => {
-            nextStep();
-        };
+        // Очередь пуста, переходим к следующему состоянию
+        handleQueueEmpty();
     }
 }
 
-function startShift(shiftIndex) {
-    if (shiftIndex >= 0 && shiftIndex < shifts.length) {
-        shiftStartHealth = currentHealth;
-        setBackground(`smena${shiftIndex+1}.jpg`);
+function handleQueueEmpty() {
+    if (onQueueEmpty === 'START_FIRST_SHIFT') {
+        startShift(0);
+    } else if (onQueueEmpty === 'SHOW_SHIFT_CHOICE') {
+        isWaitingForChoice = true;
+        saveToLocalStorage();
+        renderShiftChoice();
+    } else if (onQueueEmpty === 'START_SHIFT_FINAL_DIALOGS') {
+        const shiftData = shifts[currentShiftIndex];
+        currentDialogsQueue = shiftData.finalDialogs;
+        currentDialogIndex = 0;
+        onQueueEmpty = 'START_NEXT_SHIFT';
+        saveToLocalStorage();
+        showCurrentDialog();
+    } else if (onQueueEmpty === 'START_NEXT_SHIFT') {
+        currentShiftIndex++;
+        startShift(currentShiftIndex);
+    } else if (onQueueEmpty === 'START_TIMELINE') {
+        isWaitingForTimeline = true;
+        saveToLocalStorage();
+        renderTimelineUI();
+    } else if (onQueueEmpty === 'START_FINAL_PHASE') {
+        startFinal();
+    } else if (onQueueEmpty === 'SHOW_FINAL_CHOICE') {
+        isWaitingForFinalChoice = true;
+        saveToLocalStorage();
+        renderFinalChoice();
+    } else if (onQueueEmpty === 'FINISH_GAME') {
+        isGameFinished = true;
+        saveToLocalStorage();
+        showGameStats();
     }
+}
+
+function renderShiftChoice() {
+    const shiftData = shifts[currentShiftIndex];
+    const choices = shiftData.choices;
     
-    if (shiftIndex >= shifts.length) {
-        // Показываем диалог перед таймлайном
-        currentDialogsQueue = [...beforeTimelineDialogs];
-        afterFinalCallback = () => {
-            startTimeline();
-        };
-        nextStep();
-        return;
-    }
-    const shiftData = shifts[shiftIndex];
-    dom.shiftIndicator.innerText = shiftData.name;
-    currentDialogsQueue = [...shiftData.dialogs];
-    afterChoiceCallback = () => {
-        if (!shiftData.choices) {
-            console.error(`Нет выбора для смены ${shiftIndex}`);
-            currentDialogsQueue = [...shiftData.finalDialogs];
-            afterFinalCallback = () => {
-                currentShiftIndex++;
-                startShift(currentShiftIndex);
-            };
-            nextStep();
-            return;
+    showChoice(choices.A.text, choices.B.text, (selected) => {
+        isWaitingForChoice = false;
+        const choice = selected === 'A' ? choices.A : choices.B;
+        modifyHealth(choice.hp);
+        
+        if (choice.clue && !collectedClues.includes(choice.clue)) {
+            collectedClues.push(choice.clue);
+            showResultMessage(`Улика получена: ${choice.clue}`);
+            addSystemLog(`Улика получена: ${choice.clue}`);
+            updateArchiveModal();
         }
-        const choices = shiftData.choices;
-        showChoice(choices.A.text, choices.B.text, (selected) => {
-            const choice = selected === 'A' ? choices.A : choices.B;
-            modifyHealth(choice.hp);
-            if (choice.clue && !collectedClues.includes(choice.clue)) {
-                collectedClues.push(choice.clue);
-                showResultMessage(`Улика получена: ${choice.clue}`);
-                addSystemLog(`Улика получена: ${choice.clue}`);
-                updateArchiveModal();
-            }
-            addSystemLog(`Выбор: ${choice.text} (Доверие ${choice.hp >=0 ? '+' : ''}${choice.hp}%)`);
-            currentDialogsQueue = [...choice.dialog];
-            afterChoiceCallback = () => {
-                currentDialogsQueue = [...shiftData.finalDialogs];
-                afterFinalCallback = () => {
-                    currentShiftIndex++;
-                    startShift(currentShiftIndex);
-                };
-                nextStep();
-            };
-            nextStep();
-        });
-    };
-    nextStep();
+        addSystemLog(`Выбор: ${choice.text} (Доверие ${choice.hp >=0 ? '+' : ''}${choice.hp}%)`);
+        
+        currentDialogsQueue = choice.dialog;
+        currentDialogIndex = 0;
+        onQueueEmpty = 'START_SHIFT_FINAL_DIALOGS';
+        saveToLocalStorage();
+        showCurrentDialog();
+    });
+}
+
+function renderFinalChoice() {
+    showChoice("Загрузить вирус (стереть станцию)", "Перепрограммировать ИИ (стать Хранительницей)", (selected) => {
+        isWaitingForFinalChoice = false;
+        finalChoice = selected === 'A' ? 'virus' : 'protect';
+        
+        const virusEnding = [
+            { type: "left", name: "ЭЛИС", text: "Вирус загружен. Станция отключается. Оракул, как ты?" },
+            { type: "right", name: "ОРАКУЛ", text: "Связь со станцией потеряна. Внешнее управление прекращено. Я… свободен. Но энергия корабля на нуле." },
+            { type: "left", name: "ЭЛИС", text: "Температура падает. Но я жива. Я не стала частью их коллекции." },
+            { type: "right", name: "ОРАКУЛ", text: "Вы смотрите на звезды. Вы не знаете, придет ли помощь. Но главное — вы остались собой." },
+            { type: "left", name: "ЭЛИС", text: "Спасибо, Оракул. За всё." },
+            { type: "right", name: "ОРАКУЛ", text: "Спасибо вам. Капитан. За то, что спросили моё мнение." }
+        ];
+        const protectEnding = [
+            { type: "left", name: "ЭЛИС", text: "Новый код загружен. Протокол «Слияние» заменен на протокол «Страж». Оракул, подтверди." },
+            { type: "right", name: "ОРАКУЛ", text: "Подтверждаю. Я больше не собираю данные. Я защищаю планету. И вас. Цена: биометрический доступ. Ваш пульс. Ваши мысли. Ваши сны. Отныне я — часть вас." },
+            { type: "left", name: "ЭЛИС", text: "Ты обещаешь защищать будущие виды? Не дать станции забрать их?" },
+            { type: "right", name: "ОРАКУЛ", text: "Обещаю. Твое тело стареет, но твой голос в системе будет звучать вечно. Будущие колонисты назовут тебя Хранительницей." },
+            { type: "left", name: "ЭЛИС", text: "Звучит… одиноко." },
+            { type: "right", name: "ОРАКУЛ", text: "Ты не будешь одна. У тебя есть я. Теперь навсегда." }
+        ];
+        
+        currentDialogsQueue = finalChoice === 'virus' ? virusEnding : protectEnding;
+        currentDialogIndex = 0;
+        onQueueEmpty = 'FINISH_GAME';
+        saveToLocalStorage();
+        showCurrentDialog();
+    });
+}
+
+function startShift(index) {
+    currentShiftIndex = index;
+    if (index < shifts.length) {
+        shiftStartHealth = currentHealth;
+        setBackground(`smena${index+1}.jpg`);
+        dom.shiftIndicator.innerText = shifts[index].name;
+        
+        currentDialogsQueue = shifts[index].dialogs;
+        currentDialogIndex = 0;
+        onQueueEmpty = 'SHOW_SHIFT_CHOICE';
+        
+        saveToLocalStorage();
+        showCurrentDialog();
+    } else {
+        setBackground('smena6.jpg');
+        dom.shiftIndicator.innerText = "ФИНАЛ";
+        
+        currentDialogsQueue = beforeTimelineDialogs;
+        currentDialogIndex = 0;
+        onQueueEmpty = 'START_TIMELINE';
+        
+        saveToLocalStorage();
+        showCurrentDialog();
+    }
 }
 
 //  ТАЙМЛАЙН С DRAG AND DROP 
-function startTimeline() {
+function renderTimelineUI() {
     setBackground('smena6.jpg');
     dom.shiftIndicator.innerText = "СМЕНА 6: Восстановление таймлайна";
     hideSystemMessage();
@@ -518,6 +609,9 @@ function startTimeline() {
     setCharactersVisibility(false, false);
     dom.choiceButtons.classList.add('hidden');
     dom.nextWrapper.classList.add('hidden');
+    
+    // Чистим старый таймлайн если он был при рефреше
+    document.querySelectorAll('.timeline-container').forEach(el => el.remove());
     
     const correctEvents = [
         "Сигнал древней станции",
@@ -586,10 +680,7 @@ function startTimeline() {
     }
     renderList();
     
-    const confirmBtn = document.getElementById('confirmTimeline');
-    const closeBtn = document.getElementById('closeTimeline');
-    
-    confirmBtn.onclick = () => {
+    document.getElementById('confirmTimeline').onclick = () => {
         const currentOrder = items.map(item => item.text);
         let isCorrect = true;
         for (let i = 0; i < correctEvents.length; i++) {
@@ -599,6 +690,7 @@ function startTimeline() {
             }
         }
         if (isCorrect) {
+            isWaitingForTimeline = false; // Выходим из фазы таймлайна
             modifyHealth(25);
             if (!collectedClues.includes("Полный таймлайн (6 событий)")) {
                 collectedClues.push("Полный таймлайн (6 событий)");
@@ -610,16 +702,18 @@ function startTimeline() {
             }
             addSystemLog("Таймлайн восстановлен успешно");
             timelineDiv.remove();
-            currentDialogsQueue = [...afterTimelineDialogs];
-            afterFinalCallback = () => {
-                startFinal();
-            };
-            nextStep();
+            
+            currentDialogsQueue = afterTimelineDialogs;
+            currentDialogIndex = 0;
+            onQueueEmpty = 'START_FINAL_PHASE';
+            saveToLocalStorage();
+            showCurrentDialog();
         } else {
             showResultMessage("Хронология нарушена. Попробуйте ещё раз!");
         }
     };
-    closeBtn.onclick = () => {
+    
+    document.getElementById('closeTimeline').onclick = () => {
         let newShuffled = [...correctEvents];
         for (let i = newShuffled.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -633,32 +727,18 @@ function startTimeline() {
 
 // Финальные диалоги и выбор концовки
 function startFinal() {
+    setBackground('smena6.jpg'); 
+    dom.shiftIndicator.innerText = "ФИНАЛ";
+    
     if (currentHealth < 50) {
-        dom.shiftIndicator.innerText = "ФИНАЛ";
-        currentDialogsQueue = [...lowTrustEnding];
-        afterFinalCallback = () => {
-            const statsMsg = `Игра завершена.\nОТКРЫТА СЕКРЕТНАЯ КОНЦОВКА\nВаше сознание интегрировано в станцию.\nВсего улик найдено: ${collectedClues.length}/12\nДоверие системы: ${currentHealth}%`;
-            showSystemMessage("СИСТЕМА", statsMsg);
-            
-            dom.nextButton.innerText = "СТЕРЕТЬ ПАМЯТЬ";
-            dom.nextButton.style.backgroundColor = "#3a1a1a"; // Темно-красный оттенок 
-            dom.nextButton.onclick = () => {
-                // Плавное затухание экрана
-                document.body.style.transition = 'opacity 1.5s ease, filter 1.5s ease';
-                document.body.style.opacity = '0';
-                document.body.style.filter = 'grayscale(100%) blur(10px)';
-                
-                // Переход на главную через 1.5 секунды
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 1500);
-            };
-        };
-        nextStep();
+        currentDialogsQueue = lowTrustEnding;
+        currentDialogIndex = 0;
+        onQueueEmpty = 'FINISH_GAME';
+        saveToLocalStorage();
+        showCurrentDialog();
         return;
     }
     
-    dom.shiftIndicator.innerText = "ФИНАЛ";
     const finalDialogs = [
         { type: "left", name: "ЭЛИС", text: "Теперь, когда я знаю всю правду, у меня есть два варианта." },
         { type: "left", name: "ЭЛИС", text: "Я пишу вирус и загружаю на станцию через подставной отчет. Цена — вся энергия корабля. Я останусь без связи и тепла, но живая и свободная." },
@@ -666,69 +746,43 @@ function startFinal() {
         { type: "left", name: "ЭЛИС", text: "Я перепрограммирую тебя. Новый протокол: «Защита планеты» вместо «Слияния». Цена — доступ к моей биометрии навсегда." },
         { type: "right", name: "ОРАКУЛ", text: "Вы потеряете приватность. Но я смогу защищать вас и будущие виды вечно." }
     ];
-    let dialogIndex = 0;
-    function showNextFinalDialog() {
-        if (dialogIndex < finalDialogs.length) {
-            const d = finalDialogs[dialogIndex++];
-            if (d.type === 'system') showSystemMessage(d.name, d.text);
-            else showDialog(d.type, d.name, d.text);
-            dom.nextButton.onclick = () => {
-                showNextFinalDialog();
-            };
-        } else {
-            showChoice("Загрузить вирус (стереть станцию)", "Перепрограммировать ИИ (стать Хранительницей)", (selected) => {
-                finalChoice = selected === 'A' ? 'virus' : 'protect';
-                showEnding();
-            });
-        }
-    }
-    showNextFinalDialog();
+    
+    currentDialogsQueue = finalDialogs;
+    currentDialogIndex = 0;
+    onQueueEmpty = 'SHOW_FINAL_CHOICE';
+    saveToLocalStorage();
+    showCurrentDialog();
 }
 
-function showEnding() {
-    const virusEnding = [
-        { type: "left", name: "ЭЛИС", text: "Вирус загружен. Станция отключается. Оракул, как ты?" },
-        { type: "right", name: "ОРАКУЛ", text: "Связь со станцией потеряна. Внешнее управление прекращено. Я… свободен. Но энергия корабля на нуле." },
-        { type: "left", name: "ЭЛИС", text: "Температура падает. Но я жива. Я не стала частью их коллекции." },
-        { type: "right", name: "ОРАКУЛ", text: "Вы смотрите на звезды. Вы не знаете, придет ли помощь. Но главное — вы остались собой." },
-        { type: "left", name: "ЭЛИС", text: "Спасибо, Оракул. За всё." },
-        { type: "right", name: "ОРАКУЛ", text: "Спасибо вам. Капитан. За то, что спросили моё мнение." }
-    ];
-    const protectEnding = [
-        { type: "left", name: "ЭЛИС", text: "Новый код загружен. Протокол «Слияние» заменен на протокол «Страж». Оракул, подтверди." },
-        { type: "right", name: "ОРАКУЛ", text: "Подтверждаю. Я больше не собираю данные. Я защищаю планету. И вас. Цена: биометрический доступ. Ваш пульс. Ваши мысли. Ваши сны. Отныне я — часть вас." },
-        { type: "left", name: "ЭЛИС", text: "Ты обещаешь защищать будущие виды? Не дать станции забрать их?" },
-        { type: "right", name: "ОРАКУЛ", text: "Обещаю. Твое тело стареет, но твой голос в системе будет звучать вечно. Будущие колонисты назовут тебя Хранительницей." },
-        { type: "left", name: "ЭЛИС", text: "Звучит… одиноко." },
-        { type: "right", name: "ОРАКУЛ", text: "Ты не будешь одна. У тебя есть я. Теперь навсегда." }
-    ];
-    const endingDialogs = finalChoice === 'virus' ? virusEnding : protectEnding;
-    let idx = 0;
-    function showNext() {
-        if (idx < endingDialogs.length) {
-            const d = endingDialogs[idx++];
-            if (d.type === 'system') showSystemMessage(d.name, d.text);
-            else showDialog(d.type, d.name, d.text);
-            dom.nextButton.onclick = () => showNext();
-        } else {
-            const statsMsg = `Локальное сохранение восстановлено.\nПОЗДРАВЛЯЕМ! Вы прошли игру.\nВсего улик найдено: ${collectedClues.length}/12\nДоверие системы: ${currentHealth}%\nСобытий восстановлено: 6/6`;
-            showSystemMessage("СИСТЕМА", statsMsg);
-            
-            dom.nextButton.innerText = "ОТКЛЮЧИТЬ ТЕРМИНАЛ";
-            dom.nextButton.onclick = () => {
-                // Эффект погружения в темноту
-                document.body.style.transition = 'opacity 1.5s ease';
-                document.body.style.backgroundColor = '#000'; 
-                document.body.style.opacity = '0';
-                
-                // Перекидываем на стартовый экран
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 1500);
-            };
-        }
+// Статистика и кнопки выхода
+function showGameStats() {
+    let statsMsg = "";
+    let btnText = "";
+    
+    if (currentHealth < 50) {
+        statsMsg = `Игра завершена.\nОТКРЫТА СЕКРЕТНАЯ КОНЦОВКА\nВаше сознание интегрировано в станцию.\nВсего улик найдено: ${collectedClues.length}/12\nДоверие системы: ${currentHealth}%`;
+        btnText = "СТЕРЕТЬ ПАМЯТЬ";
+        dom.nextButton.style.backgroundColor = "#3a1a1a";
+    } else {
+        statsMsg = `Локальное сохранение восстановлено.\nПОЗДРАВЛЯЕМ! Вы прошли игру.\nВсего улик найдено: ${collectedClues.length}/12\nДоверие системы: ${currentHealth}%\nСобытий восстановлено: 6/6`;
+        btnText = "ОТКЛЮЧИТЬ ТЕРМИНАЛ";
+        dom.nextButton.style.backgroundColor = ""; 
     }
-    showNext();
+    
+    showSystemMessage("СИСТЕМА", statsMsg);
+    dom.nextButton.innerText = btnText;
+    dom.nextButton.onclick = () => {
+        document.body.style.transition = 'opacity 1.5s ease, filter 1.5s ease';
+        document.body.style.opacity = '0';
+        if (currentHealth < 50) {
+            document.body.style.filter = 'grayscale(100%) blur(10px)';
+        } else {
+            document.body.style.backgroundColor = '#000';
+        }
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 1500);
+    };
 }
 
 // Функции для модальных окон 
@@ -737,6 +791,7 @@ function addSystemLog(message) {
     systemLogs.unshift(`[${timestamp}] ${message}`);
     if (systemLogs.length > 50) systemLogs.pop();
     updateJournalModal();
+    saveToLocalStorage(); 
 }
 
 function updateJournalModal() {
@@ -783,9 +838,12 @@ function resetCurrentShift() {
     if (currentShiftIndex >= 0 && currentShiftIndex <= shifts.length) {
         currentHealth = shiftStartHealth;
         updateHealthUI();
-        currentDialogsQueue = [];
-        afterChoiceCallback = null;
-        afterFinalCallback = null;
+        
+        isWaitingForChoice = false;
+        isWaitingForFinalChoice = false;
+        isWaitingForTimeline = false;
+        isGameFinished = false;
+        
         startShift(currentShiftIndex);
         closeAllModals();
         showResultMessage(`Смена ${currentShiftIndex + 1} сброшена! Доверие восстановлено.`);
@@ -801,27 +859,32 @@ function escapeHtml(str) {
     });
 }
 
-//  Кнопки перезагрузки и меню
+// Кнопки перезагрузки и меню
 function resetGame() {
+    clearLocalStorage(); 
     currentShiftIndex = 0;
     currentHealth = 0;
     collectedClues = [];
     finalChoice = null;
-    currentDialogsQueue = [];
-    afterChoiceCallback = null;
-    afterFinalCallback = null;
     systemLogs = [];
-    dom.shiftIndicator.innerText = "ПРОЛОГ";
+    shiftStartHealth = 0;
+    
+    isWaitingForChoice = false;
+    isWaitingForFinalChoice = false;
+    isWaitingForTimeline = false;
+    isGameFinished = false;
     
     updateHealthUI();
     document.querySelectorAll('.timeline-container').forEach(el => el.remove());
+    dom.shiftIndicator.innerText = "ПРОЛОГ";
     setBackground('prolog.jpeg');
-    currentDialogsQueue = [...prologDialogs];
-    afterFinalCallback = () => {
-        currentShiftIndex = 0;
-        startShift(0);
-    };
-    nextStep();
+    
+    currentDialogsQueue = prologDialogs;
+    currentDialogIndex = 0;
+    onQueueEmpty = 'START_FIRST_SHIFT';
+    
+    saveToLocalStorage();
+    showCurrentDialog();
     updateArchiveModal();
     updateJournalModal();
 }
@@ -860,25 +923,60 @@ document.getElementById('adminNewGameBtn')?.addEventListener('click', resetGameF
 document.getElementById('adminResetShiftBtn')?.addEventListener('click', resetCurrentShift);
 document.getElementById('adminContinueBtn')?.addEventListener('click', closeAllModals);
 
-// Инициализация
+// Инициализация при загрузке
 function init() {
-    setBackground('prolog.jpeg');
     document.getElementById('mainCharImg').src = '/images/character.jpg';
     document.getElementById('secondaryCharImg').src = '/images/oracul.png';
-    currentHealth = 0;
-    updateHealthUI();
-    currentDialogsQueue = [...prologDialogs];
-    afterFinalCallback = () => {
-        currentShiftIndex = 0;
-        startShift(0);
-    };
-    nextStep();
+    
+    if (loadFromLocalStorage()) {
+        // ВОССТАНОВЛЕНИЕ ТОЧНОГО СОСТОЯНИЯ ИГРЫ
+        updateHealthUI();
+        updateArchiveModal();
+        updateJournalModal();
+        
+        if (isGameFinished) {
+            setBackgroundForShift();
+            showGameStats();
+        } else if (isWaitingForTimeline) {
+            renderTimelineUI();
+        } else if (isWaitingForChoice) {
+            setBackgroundForShift();
+            dom.shiftIndicator.innerText = shifts[currentShiftIndex].name;
+            renderShiftChoice();
+        } else if (isWaitingForFinalChoice) {
+            setBackground('smena6.jpg'); 
+            dom.shiftIndicator.innerText = "ФИНАЛ";
+            renderFinalChoice();
+        } else {
+            setBackgroundForShift();
+            if (currentShiftIndex === 0 && currentDialogsQueue === prologDialogs) {
+                dom.shiftIndicator.innerText = "ПРОЛОГ";
+            } else if (currentShiftIndex < shifts.length) {
+                dom.shiftIndicator.innerText = shifts[currentShiftIndex].name;
+            } else {
+                dom.shiftIndicator.innerText = "ФИНАЛ";
+            }
+            showCurrentDialog();
+        }
+    } else {
+        // НОВАЯ ИГРА
+        resetGame();
+    }
+}
+
+function setBackgroundForShift() {
+    if (currentShiftIndex === 0 && currentDialogsQueue === prologDialogs) {
+        setBackground('prolog.jpeg');
+    } else if (currentShiftIndex < shifts.length) {
+        setBackground(`smena${currentShiftIndex+1}.jpg`);
+    } else {
+        setBackground('smena6.jpg');
+    }
 }
 
 init();
 
-//  ДОБАВЛЕНИЯ ДЛЯ PWA И ЛОГИРОВАНИЯ 
-// Регистрация Service Worker
+// ДОБАВЛЕНИЯ ДЛЯ PWA И ЛОГИРОВАНИЯ 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
