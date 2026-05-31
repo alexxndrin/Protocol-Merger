@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kovcheg-v2'; // Обновили версию кэша
+const CACHE_NAME = 'kovcheg-v3'; // Обновили версию кэша
 const urls = [
     '/',
     '/index.html',
@@ -16,7 +16,23 @@ const urls = [
     '/images/icon.svg',
     '/media/background.mp3',
     '/media/background2.mp3',
-    '/media/switch.mp3'
+    '/media/switch.mp3',
+    '/images/index1.jpg',
+    '/images/index2.jpg',
+    '/images/index3.jpg',
+    '/images/index4.jpg',
+    '/images/main.jpg',
+    '/images/prolog.jpeg',
+    '/images/smena1.jpg',
+    '/images/smena2.jpg',
+    '/images/smena3.jpg',
+    '/images/smena4.jpg',
+    '/images/smena5.jpg',
+    '/images/smena6.jpg',
+    '/images/sound.gif',
+    '/fonts/a-citynovalt.woff2',
+    '/fonts/casanova.woff2',
+    '/fonts/dreamscar.woff2'
 ];
 
 self.addEventListener('install', e => {
